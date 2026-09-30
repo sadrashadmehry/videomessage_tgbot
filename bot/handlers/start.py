@@ -1,30 +1,18 @@
 from aiogram import Router
 from aiogram.filters import Command, CommandStart
-from aiogram.types import Message
+from aiogram.types import KeyboardButton, Message, ReplyKeyboardMarkup
 
 from bot.services.storage_service import StatsStorage
 
 router = Router(name="start")
 
 WELCOME = (
-    "👋 Send me a video or GIF and I'll turn it into a round Telegram video "
-    "message (the circular \"video note\" bubble), just like the one you get "
-    "from the camera icon next to the message box.\n\n"
-    "After you send a file I'll show you a preview with a circle on it — use "
-    "the buttons under the preview to move and resize that circle so it "
-    "frames the part you want visible.\n\n"
-    "Want to use only part of a longer clip? Tap ✂️ Trim and send a range "
-    "like `5-12` or `0:05-0:20` (seconds or mm:ss) — or just a start time "
-    "to keep the next 60s from there.\n\n"
-    "Once you're happy, hit ✅ Confirm. After the round video is sent, you "
-    "can tap 🎞 Send as GIF to get a silent animation that can be saved to your GIFs.\n\n"
-    "Notes:\n"
-    "• Video messages top out at 60 seconds; longer selections get trimmed "
-    "to fit.\n"
-    "• Because of Telegram Bot API limits, files over 20MB can't be "
-    "downloaded by the bot unless it's running against a local Bot API "
-    "server (see README).\n\n"
-    "Send /cancel any time to abort the current video."
+    "سلام و ادب و احترام و تشکر و عرض؛\n"
+    "ویدیو/گیفتونو اپلود کنید و قبل از کانفیرم اگر جای خاصی از ویدیو مدنظرتونه که کراپ شه انتخابش کنید. "
+    "اگر میخواستید اول و اخر ویدیو حذف بشه زمان شروع و پایان ویدیو رو بفرستین."
+)
+START_KEYBOARD = ReplyKeyboardMarkup(
+    keyboard=[[KeyboardButton(text="/start")]], resize_keyboard=True, is_persistent=True,
 )
 
 
@@ -39,7 +27,7 @@ async def cmd_start(message: Message, stats_db: StatsStorage) -> None:
             text=message.text or "/start",
             kind="start",
         )
-    await message.answer(WELCOME)
+    await message.answer(WELCOME, reply_markup=START_KEYBOARD)
 
 
 @router.message(Command("help"))
@@ -53,4 +41,4 @@ async def cmd_help(message: Message, stats_db: StatsStorage) -> None:
             text=message.text or "/help",
             kind="command",
         )
-    await message.answer(WELCOME)
+    await message.answer(WELCOME, reply_markup=START_KEYBOARD)

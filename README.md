@@ -111,6 +111,10 @@ node --test worker/worker.test.mjs
 
 ## Configuration
 
+Edit `WELCOME` in `bot/handlers/start.py` to change the `/start` and `/help`
+reply, then rebuild and restart the bot container. The persistent `/start`
+reply button appears after a user opens the bot and sends `/start` once.
+
 The result has one **Send as GIF** action. It sends a silent animation with
 the video-note image inside a circular matte, which Telegram users can save
 to their GIFs. Telegram still displays the animation in a rectangular media

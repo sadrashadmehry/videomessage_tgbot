@@ -27,9 +27,10 @@ def render_crop_preview(frame_path: str, crop: dict, output_path: str) -> None:
     composed = Image.composite(img, dimmed, mask)
 
     draw = ImageDraw.Draw(composed)
-    outline_width = max(2, size // 150)
-    draw.ellipse([x, y, x + size, y + size], outline=(255, 255, 255), width=outline_width)
-    draw.rectangle([x, y, x + size, y + size], outline=(255, 255, 255, 128), width=1)
+    outline_width = max(3, size // 120)
+    bounds = [x, y, x + size, y + size]
+    draw.ellipse(bounds, outline=(0, 0, 0), width=outline_width + 4)
+    draw.ellipse(bounds, outline=(255, 230, 0), width=outline_width)
 
     if max(w, h) > DISPLAY_MAX_SIDE:
         scale = DISPLAY_MAX_SIDE / max(w, h)
