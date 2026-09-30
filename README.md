@@ -111,6 +111,12 @@ node --test worker/worker.test.mjs
 
 ## Configuration
 
+The result has two actions: **Send round copy** resends the Telegram video
+note and keeps its circular presentation; **GIF library (square)** sends a
+silent animation that can be saved with Telegram GIFs. Telegram displays
+animations as square media, even when their source was a round video note.
+Older **Send GIF version** buttons now send a round copy.
+
 ## Inspecting users and media
 
 Version 3 keeps user activity and job metadata in `data/bot.sqlite3`. The

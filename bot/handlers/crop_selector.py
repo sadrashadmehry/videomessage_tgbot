@@ -252,7 +252,7 @@ async def _render_and_send(
                 video_note_file_unique_id=note.file_unique_id if note else None,
             )
         await preview_message.edit_caption(
-            caption="✅ Sent! Use the 🎞 button under the round video if you also want a GIF-library version."
+            caption="✅ Sent! Use the buttons below for another round copy or a square GIF-library version."
         )
     except FFmpegError as e:
         logger.warning("ffmpeg render failed: %s", e)
@@ -269,22 +269,38 @@ async def _render_and_send(
         await state.clear()
 
 
-@router.callback_query(F.data.startswith("result:gif:"))
+@router.callback_query(F.data.startswith("result:"))
 async def handle_send_gif_version(
     call: CallbackQuery, config: Config, stats_db: StatsStorage
 ) -> None:
     try:
-        job_id = int(call.data.rsplit(":", 1)[1])
+        _, kind, job_id_text = call.data.split(":", 2)
+        if kind not in ("round", "gif", "square_gif"):
+            raise ValueError("unknown result action")
+        job_id = int(job_id_text)
     except (TypeError, ValueError):
-        await call.answer("This GIF button is invalid.", show_alert=True)
+        await call.answer("This button is invalid.", show_alert=True)
         return
 
     job = stats_db.get_job(job_id)
     if not job or not call.from_user or job["user_id"] != call.from_user.id:
-        await call.answer("This GIF button isn't available for your account.", show_alert=True)
+        await call.answer("This button isn't available for your account.", show_alert=True)
         return
 
     stats_db.upsert_user(call.from_user)
+    if kind in ("round", "gif"):
+        video_note_file_id = job.get("video_note_file_id")
+        if not video_note_file_id:
+            await call.answer("This round video is unavailable.", show_alert=True)
+            return
+        await call.answer("Sending round copy…")
+        try:
+            await call.message.answer_video_note(video_note=video_note_file_id)
+        except Exception:
+            logger.exception("failed to resend round video for job %s", job_id)
+            await call.message.answer("⚠️ I couldn't resend that round video. Please try again.")
+        return
+
     stats_db.mark_gif_requested(call.from_user.id)
 
     # Once generated once, resend the Telegram-hosted animation by file_id.
