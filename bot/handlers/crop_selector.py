@@ -252,7 +252,7 @@ async def _render_and_send(
                 video_note_file_unique_id=note.file_unique_id if note else None,
             )
         await preview_message.edit_caption(
-            caption="✅ Sent! Use the buttons below for another round copy or a square GIF-library version."
+            caption="✅ Sent! Tap 🎞 Send as GIF below for a silent version you can save to your GIFs."
         )
     except FFmpegError as e:
         logger.warning("ffmpeg render failed: %s", e)
@@ -288,24 +288,11 @@ async def handle_send_gif_version(
         return
 
     stats_db.upsert_user(call.from_user)
-    if kind in ("round", "gif"):
-        video_note_file_id = job.get("video_note_file_id")
-        if not video_note_file_id:
-            await call.answer("This round video is unavailable.", show_alert=True)
-            return
-        await call.answer("Sending round copy…")
-        try:
-            await call.message.answer_video_note(video_note=video_note_file_id)
-        except Exception:
-            logger.exception("failed to resend round video for job %s", job_id)
-            await call.message.answer("⚠️ I couldn't resend that round video. Please try again.")
-        return
-
     stats_db.mark_gif_requested(call.from_user.id)
 
     # Once generated once, resend the Telegram-hosted animation by file_id.
     # This requires zero media storage or ffmpeg work on our server.
-    if job.get("animation_file_id"):
+    if job.get("animation_file_id") and job.get("animation_version") == 1:
         await call.answer("Sending GIF version…")
         try:
             await call.message.answer_animation(animation=job["animation_file_id"])

@@ -82,6 +82,7 @@ class StatsStorage:
                     video_note_file_unique_id TEXT,
                     animation_file_id TEXT,
                     animation_file_unique_id TEXT,
+                    animation_version INTEGER NOT NULL DEFAULT 0,
                     FOREIGN KEY(user_id) REFERENCES users(user_id)
                 );
 
@@ -103,6 +104,8 @@ class StatsStorage:
                 CREATE INDEX IF NOT EXISTS idx_prompts_created_at ON prompts(created_at);
                 """
             )
+            if "animation_version" not in {row[1] for row in conn.execute("PRAGMA table_info(jobs)")}:
+                conn.execute("ALTER TABLE jobs ADD COLUMN animation_version INTEGER NOT NULL DEFAULT 0")
 
     def upsert_user(self, user: "User", *, increment_start: bool = False) -> None:
         now = _utc_now()
@@ -212,7 +215,7 @@ class StatsStorage:
             "has_audio", "crop_json", "trim_start", "trim_end",
             "trim_input_text", "video_note_file_id", "video_note_file_unique_id",
             "animation_file_id", "animation_file_unique_id", "completed_at",
-            "gif_generated_at",
+            "gif_generated_at", "animation_version",
         }
         payload = {key: value for key, value in fields.items() if key in allowed}
         if not payload:
@@ -293,6 +296,7 @@ class StatsStorage:
             animation_file_id=animation_file_id,
             animation_file_unique_id=animation_file_unique_id,
             gif_generated_at=_utc_now(),
+            animation_version=1,
         )
 
     def get_job(self, job_id: int) -> dict[str, Any] | None:

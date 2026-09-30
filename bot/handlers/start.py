@@ -17,7 +17,7 @@ WELCOME = (
     "like `5-12` or `0:05-0:20` (seconds or mm:ss) — or just a start time "
     "to keep the next 60s from there.\n\n"
     "Once you're happy, hit ✅ Confirm. After the round video is sent, you "
-    "can send another round copy, or get a square animation for your GIF library.\n\n"
+    "can tap 🎞 Send as GIF to get a silent animation that can be saved to your GIFs.\n\n"
     "Notes:\n"
     "• Video messages top out at 60 seconds; longer selections get trimmed "
     "to fit.\n"

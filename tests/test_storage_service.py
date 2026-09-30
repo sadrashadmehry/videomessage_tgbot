@@ -62,6 +62,7 @@ def test_user_and_job_metadata_are_persistent(tmp_path):
     assert job["source_file_id"] == "source-file-id"
     assert job["video_note_file_id"] == "note-file-id"
     assert job["animation_file_id"] == "animation-file-id"
+    assert job["animation_version"] == 1
     assert job["prompt_text"] == "make this one"
     assert job["status"] == "completed"
 

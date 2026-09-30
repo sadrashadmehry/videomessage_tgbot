@@ -186,19 +186,29 @@ async def render_animation_from_video_note(
 ) -> None:
     """Turn our rendered video-note MP4 into a Telegram animation.
 
-    The video note is already square H.264, so no crop/scale/re-encode is
-    needed. We only remove audio and remux the H.264 stream into a fresh MP4.
-    That preserves the exact video-note pixels, is fast, and avoids a second
-    quality loss. Telegram's ``sendAnimation`` treats silent H.264 MP4 as a
-    GIF-style animation that users can save/reuse from their GIF library.
+    Keep the video-note crop, but mask its corners against a dark matte.
+    Telegram animations remain rectangular media; this makes the content
+    circular while retaining the Add to GIFs action.
     """
+    inside = "clip((0.25-(X/W-0.5)*(X/W-0.5)-(Y/H-0.5)*(Y/H-0.5))*W,0,1)"
+    vf = (
+        "format=yuv444p,geq="
+        f"lum='40+(lum(X,Y)-40)*{inside}':"
+        f"cb='130+(cb(X,Y)-130)*{inside}':"
+        f"cr='127+(cr(X,Y)-127)*{inside}',"
+        "format=yuv420p"
+    )
     cmd = [
         ffmpeg_binary,
         "-y",
         "-i", input_path,
         "-map", "0:v:0",
         "-an",
-        "-c:v", "copy",
+        "-vf", vf,
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-crf", "23",
+        "-pix_fmt", "yuv420p",
         "-movflags", "+faststart",
         output_path,
     ]

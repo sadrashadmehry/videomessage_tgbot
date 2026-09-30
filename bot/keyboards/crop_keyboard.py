@@ -28,7 +28,5 @@ def trim_entry_keyboard() -> InlineKeyboardMarkup:
 def result_keyboard(job_id: int) -> InlineKeyboardMarkup:
     """Actions available after the round video has been rendered."""
     b = InlineKeyboardBuilder()
-    b.button(text="⭕ Send round copy", callback_data=f"result:round:{job_id}")
-    b.button(text="🎞 GIF library (square)", callback_data=f"result:square_gif:{job_id}")
-    b.adjust(1)
+    b.button(text="🎞 Send as GIF", callback_data=f"result:gif:{job_id}")
     return b.as_markup()

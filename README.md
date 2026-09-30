@@ -111,11 +111,11 @@ node --test worker/worker.test.mjs
 
 ## Configuration
 
-The result has two actions: **Send round copy** resends the Telegram video
-note and keeps its circular presentation; **GIF library (square)** sends a
-silent animation that can be saved with Telegram GIFs. Telegram displays
-animations as square media, even when their source was a round video note.
-Older **Send GIF version** buttons now send a round copy.
+The result has one **Send as GIF** action. It sends a silent animation with
+the video-note image inside a circular matte, which Telegram users can save
+to their GIFs. Telegram still displays the animation in a rectangular media
+frame; it cannot use the native video-note circle or transparency. The matte
+matches a dark chat theme and may be visible in other themes.
 
 ## Inspecting users and media
 
