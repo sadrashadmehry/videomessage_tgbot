@@ -1,0 +1,7 @@
+name = "videomessage-telegram-relay"
+main = "index.mjs"
+compatibility_date = "2026-09-26"
+workers_dev = true
+
+[observability]
+enabled = false

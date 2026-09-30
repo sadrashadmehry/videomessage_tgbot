@@ -57,6 +57,58 @@ python -m bot.main
 docker compose up --build
 ```
 
+### Cloudflare first, XHTTP fallback
+
+The bot can send API requests, previews, video uploads, and file downloads
+through your own authenticated Cloudflare Worker. On Cloudflare error 1027
+(Workers Free daily request quota), it switches to the XHTTP proxy until
+midnight UTC, then tries the Worker again. Telegram's own JSON 429 responses
+keep their normal retry behavior; switching proxies cannot bypass those limits.
+Worker network failures use the proxy for 60 seconds. An ambiguous failed
+send/upload is not automatically replayed, to avoid sending duplicate messages.
+An interrupted download is not restarted after bytes have been written.
+
+1. Deploy `worker/index.mjs` with `worker/wrangler.toml` using Cloudflare's
+   dashboard or Wrangler. Set Worker secrets `BOT_TOKEN` (the same bot token)
+   and `RELAY_SECRET` (a long random secret). The relay only forwards to Telegram;
+   it never accepts an arbitrary upstream URL. Keep Worker request logging off.
+2. In your private `.env`, set `WORKER_URL=https://your-worker.workers.dev`
+   and `WORKER_SECRET` to that same relay secret.
+3. Save your VLESS link as `secrets/xhttp.txt`, then run:
+
+   ```bash
+   python scripts/configure_xray.py secrets/xhttp.txt
+   docker compose -p telegram-bot-v2 -f docker-compose.yml -f compose.proxy.yml up -d --build
+   ```
+
+The supplied converter preserves VLESS encryption, XHTTP host/path/mode, and
+padding. It supports the encrypted, non-TLS XHTTP configuration used here.
+Xray's SOCKS port is only on the project's Docker network; no host port is
+published. Other applications and the server's default route are unaffected.
+Both downloads and uploads consume proxy traffic whenever fallback is active.
+Leave `WORKER_URL` blank for proxy-only operation. Without either a Worker
+or `FALLBACK_PROXY_URL`, the bot uses direct Telegram access.
+
+The free Worker quota is account-wide (100,000 requests/day), not a GB allowance.
+Other Workers share it. This application reacts to Cloudflare's enforced quota;
+it does not impose a billing cap on paid Workers plans. See
+[Cloudflare limits](https://developers.cloudflare.com/workers/platform/limits/).
+After a process restart, one Worker request may probe an already-exhausted quota.
+
+For servers whose network blocks the normal package registries, use the supplied
+`Dockerfile.server`. An untracked `docker-compose.override.yml` can select it.
+When using explicit `-f` flags, include the override explicitly as the last file.
+The optional `xray/Dockerfile` builds from a checksum-verified official Xray
+Linux x64 binary saved as `xray/xray`, for offline installation of the supplied
+non-TLS transport. Credentials and binaries are ignored by Git.
+
+Run transport and Worker checks with:
+
+```bash
+python -m pytest -q
+node --test worker/worker.test.mjs
+```
+
 ## Configuration
 
 All settings are environment variables — see [`.env.example`](.env.example)

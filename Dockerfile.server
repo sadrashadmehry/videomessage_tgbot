@@ -1,0 +1,12 @@
+FROM docker.arvancloud.ir/library/python:3.11-slim
+RUN sed -i 's|http://deb.debian.org/debian-security|https://mirror.arvancloud.ir/debian-security|g; s|http://deb.debian.org/debian|https://mirror.arvancloud.ir/debian|g' /etc/apt/sources.list.d/debian.sources
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --index-url https://mirror-pypi.runflare.com/simple --no-cache-dir -r requirements.txt
+COPY bot ./bot
+RUN mkdir -p /app/data/tmp
+VOLUME ["/app/data/tmp"]
+CMD ["python", "-m", "bot.main"]

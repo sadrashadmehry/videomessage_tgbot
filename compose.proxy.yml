@@ -1,0 +1,17 @@
+services:
+  bot:
+    depends_on:
+      - xray
+    environment:
+      FALLBACK_PROXY_URL: socks5://xray:1080
+  xray:
+    image: ghcr.io/xtls/xray-core:26.3.27
+    command: ["run", "-config", "/etc/xray/config.json"]
+    volumes:
+      - ./secrets/xray.json:/etc/xray/config.json:ro
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "2"

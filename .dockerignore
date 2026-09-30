@@ -1,0 +1,8 @@
+.git
+.env
+secrets
+.venv
+__pycache__
+data
+*.log
+*.tar*
