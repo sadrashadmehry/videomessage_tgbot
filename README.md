@@ -111,6 +111,32 @@ node --test worker/worker.test.mjs
 
 ## Configuration
 
+## Inspecting users and media
+
+Version 3 keeps user activity and job metadata in `data/bot.sqlite3`. The
+Docker deployment mounts the entire `data` directory, so records survive
+container replacement. Recording starts when this version is deployed; older
+bot activity is not reconstructed.
+
+On the server, from `/opt/telegram-bot-v2`, use the running bot container:
+
+```bash
+docker exec telegram-bot-v2-bot-1 python -m bot.inspect users
+docker exec telegram-bot-v2-bot-1 python -m bot.inspect jobs
+docker exec telegram-bot-v2-bot-1 python -m bot.inspect jobs --user-id 123456789
+docker exec telegram-bot-v2-bot-1 python -m bot.inspect download 1 source
+docker exec telegram-bot-v2-bot-1 python -m bot.inspect download 1 video_note
+docker exec telegram-bot-v2-bot-1 python -m bot.inspect download 1 animation
+```
+
+Replace `1` with a job ID from the jobs list. Downloaded files appear in
+`/opt/telegram-bot-v2/data/exports/` with a `.bin` extension; they are usually
+video files and can be opened with a video player or renamed to `.mp4`. The
+database stores Telegram `file_id` references, not the video bytes, and a
+source file over Telegram's 20 MB bot download limit cannot be retrieved this
+way. The database also contains user names, prompts, and media references;
+keep it private.
+
 All settings are environment variables — see [`.env.example`](.env.example)
 for the full list with defaults and explanations (output size, max
 duration, download size limit, temp dir, log level, ffmpeg binary paths).

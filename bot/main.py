@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
+import os
 from pathlib import Path
 
 from aiogram import Bot, Dispatcher
@@ -13,9 +15,18 @@ from aiogram.exceptions import TelegramNetworkError, TelegramServerError
 from bot.config import load_config
 from bot.handlers import common, crop_selector, errors, start, video_intake
 from bot.transport import RoutedSession
+from bot.services.storage_service import StatsStorage
+from bot.utils.tempfiles import cleanup_stale_session_dirs
+
+
+async def _temp_cleanup_loop(temp_dir: str, ttl_minutes: int) -> None:
+    while True:
+        await asyncio.sleep(15 * 60)
+        cleanup_stale_session_dirs(temp_dir, max(ttl_minutes, 1) * 60)
 
 
 async def main() -> None:
+    os.umask(0o077)
     config = load_config()
 
     logging.basicConfig(
@@ -25,6 +36,8 @@ async def main() -> None:
     logging.getLogger("aiogram.event").setLevel(logging.WARNING)
 
     Path(config.temp_dir).mkdir(parents=True, exist_ok=True)
+    cleanup_stale_session_dirs(config.temp_dir, 0)
+    stats_db = StatsStorage(config.database_path)
 
     bot = Bot(
         token=config.bot_token,
@@ -41,6 +54,7 @@ async def main() -> None:
     dp.include_router(common.router)
     dp.include_router(errors.router)
 
+    cleanup_task = asyncio.create_task(_temp_cleanup_loop(config.temp_dir, config.temp_session_ttl_minutes))
     try:
         while True:
             try:
@@ -49,8 +63,12 @@ async def main() -> None:
             except (TelegramNetworkError, TelegramServerError):
                 logging.warning('Telegram unavailable at startup; retrying in 10 seconds')
                 await asyncio.sleep(10)
-        await dp.start_polling(bot, config=config)
+        await dp.start_polling(bot, config=config, stats_db=stats_db)
     finally:
+        cleanup_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await cleanup_task
+        cleanup_stale_session_dirs(config.temp_dir, 0)
         await bot.session.close()
 
 

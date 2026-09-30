@@ -59,6 +59,8 @@ class Config:
     min_trim_span: float = 0.5
 
     temp_dir: str = "./data/tmp"
+    database_path: str = "./data/bot.sqlite3"
+    temp_session_ttl_minutes: int = 120
     log_level: str = "INFO"
 
     ffmpeg_binary: str = "ffmpeg"
@@ -81,6 +83,8 @@ def load_config() -> Config:
         max_video_note_duration=_int_env("MAX_VIDEO_NOTE_DURATION", 60),
         max_download_size_mb=_int_env("MAX_DOWNLOAD_SIZE_MB", 20),
         temp_dir=os.getenv("TEMP_DIR", "./data/tmp"),
+        database_path=os.getenv("DATABASE_PATH", "./data/bot.sqlite3"),
+        temp_session_ttl_minutes=_int_env("TEMP_SESSION_TTL_MINUTES", 120),
         log_level=os.getenv("LOG_LEVEL", "INFO"),
         ffmpeg_binary=os.getenv("FFMPEG_BINARY", "ffmpeg"),
         ffprobe_binary=os.getenv("FFPROBE_BINARY", "ffprobe"),

@@ -8,5 +8,5 @@ COPY requirements.txt .
 RUN pip install --index-url https://mirror-pypi.runflare.com/simple --no-cache-dir -r requirements.txt
 COPY bot ./bot
 RUN mkdir -p /app/data/tmp
-VOLUME ["/app/data/tmp"]
+VOLUME ["/app/data"]
 CMD ["python", "-m", "bot.main"]

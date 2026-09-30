@@ -2,6 +2,8 @@ from aiogram import Router
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 
+from bot.services.storage_service import StatsStorage
+
 router = Router(name="start")
 
 WELCOME = (
@@ -14,7 +16,9 @@ WELCOME = (
     "Want to use only part of a longer clip? Tap ✂️ Trim and send a range "
     "like `5-12` or `0:05-0:20` (seconds or mm:ss) — or just a start time "
     "to keep the next 60s from there.\n\n"
-    "Once you're happy, hit ✅ Confirm.\n\n"
+    "Once you're happy, hit ✅ Confirm. After the round video is sent, you "
+    "can tap 🎞 Send GIF version to get the same result as a Telegram GIF/animation "
+    "that can be saved to your GIF library.\n\n"
     "Notes:\n"
     "• Video messages top out at 60 seconds; longer selections get trimmed "
     "to fit.\n"
@@ -26,10 +30,28 @@ WELCOME = (
 
 
 @router.message(CommandStart())
-async def cmd_start(message: Message) -> None:
+async def cmd_start(message: Message, stats_db: StatsStorage) -> None:
+    if message.from_user:
+        stats_db.upsert_user(message.from_user, increment_start=True)
+        stats_db.record_prompt(
+            user_id=message.from_user.id,
+            chat_id=message.chat.id,
+            message_id=message.message_id,
+            text=message.text or "/start",
+            kind="start",
+        )
     await message.answer(WELCOME)
 
 
 @router.message(Command("help"))
-async def cmd_help(message: Message) -> None:
+async def cmd_help(message: Message, stats_db: StatsStorage) -> None:
+    if message.from_user:
+        stats_db.upsert_user(message.from_user)
+        stats_db.record_prompt(
+            user_id=message.from_user.id,
+            chat_id=message.chat.id,
+            message_id=message.message_id,
+            text=message.text or "/help",
+            kind="command",
+        )
     await message.answer(WELCOME)
