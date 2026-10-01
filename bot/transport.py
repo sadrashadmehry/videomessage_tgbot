@@ -100,6 +100,7 @@ class RoutedSession(BaseSession):
         self.stats_db = stats_db
         self.worker_url = worker_url
         self.blocked_until = 0.0
+        self.proxy_blocked_until = 0.0
 
     def worker_available(self):
         return self.worker is not None and time.time() >= self.blocked_until
@@ -111,6 +112,15 @@ class RoutedSession(BaseSession):
         logger.warning('Using fallback proxy: %s', 'Worker quota exhausted until midnight UTC' if quota else 'Worker unavailable; retrying in 60 seconds')
 
     async def make_request(self, bot, method, timeout=None):
+        proxy_error = None
+        if self.stats_db and self.stats_db.route_priority() == 'proxy' and time.time() >= self.proxy_blocked_until:
+            try:
+                return await self.fallback.make_request(bot, method, timeout)
+            except (TelegramNetworkError, TelegramServerError, ClientDecodeError) as error:
+                self.proxy_blocked_until = time.time() + 60
+                if not self.worker_available() or method.__api_method__ not in ('getMe', 'getFile', 'getUpdates', 'deleteWebhook'):
+                    raise
+                proxy_error = error
         if self.worker_available():
             try:
                 return await self.worker.make_request(bot, method, timeout)
@@ -122,6 +132,8 @@ class RoutedSession(BaseSession):
                 # An upload may already have reached Telegram. Never blindly replay it.
                 if method.__api_method__ not in ('getMe', 'getFile', 'getUpdates', 'deleteWebhook'):
                     raise TelegramNetworkError(method=method, message='Worker request failed; delivery is uncertain') from error
+        if proxy_error:
+            raise proxy_error
         return await self.fallback.make_request(bot, method, timeout)
 
     async def stream_content(self, url, headers=None, timeout=30, chunk_size=65536, raise_for_status=True):
@@ -129,6 +141,21 @@ class RoutedSession(BaseSession):
         if not url.startswith(telegram_prefix):
             raise ValueError('Only Telegram file downloads are supported')
         file_path = url[len(telegram_prefix):].split('/', 1)[1]
+        proxy_error = None
+        if self.stats_db and self.stats_db.route_priority() == 'proxy' and time.time() >= self.proxy_blocked_until:
+            downloaded = 0
+            try:
+                async for chunk in self.fallback.stream_content(url, headers, timeout, chunk_size, raise_for_status):
+                    downloaded += len(chunk)
+                    yield chunk
+                return
+            except (ClientError, asyncio.TimeoutError) as error:
+                self.proxy_blocked_until = time.time() + 60
+                if downloaded or not self.worker_available():
+                    raise
+                proxy_error = error
+            finally:
+                self.stats_db.record_traffic(self.fallback_route, downloaded=downloaded)
         if self.worker_available():
             received = False
             downloaded = 0
@@ -150,6 +177,8 @@ class RoutedSession(BaseSession):
             finally:
                 if self.stats_db:
                     self.stats_db.record_traffic('cloudflare', downloaded=downloaded)
+        if proxy_error:
+            raise proxy_error
         downloaded = 0
         try:
             async for chunk in self.fallback.stream_content(url, headers, timeout, chunk_size, raise_for_status):

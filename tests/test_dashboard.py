@@ -46,6 +46,10 @@ def test_dashboard_auth_history_download_and_safe_cleanup(tmp_path):
             assert response.status == 206 and await response.read() == b"2345"
             assert (await client.delete("/api/cache", auth=auth)).status == 403
             headers = {"X-CSRF-Token": result["csrf"]}
+            assert (await client.patch("/api/routing", auth=auth, json={"priority": "proxy"})).status == 403
+            assert (await client.patch("/api/routing", auth=auth, headers=headers, json={"priority": "bad"})).status == 400
+            assert (await client.patch("/api/routing", auth=auth, headers=headers, json={"priority": "cloudflare"})).status == 400
+            assert (await client.patch("/api/routing", auth=auth, headers=headers, json={"priority": "proxy"})).status == 200
             assert (await client.delete("/api/cache", auth=auth, headers={**headers, "Origin": "https://evil.example"})).status == 403
             exports = tmp_path / "exports"
             exports.mkdir()

@@ -89,7 +89,7 @@ def create_app(config, username, hashed_password, bot=None):
             failures[peer] = recent + [now]
             raise web.HTTPUnauthorized(headers={"WWW-Authenticate": 'Basic realm="Bot dashboard", charset="UTF-8"'})
         failures.pop(peer, None)
-        if request.method == "DELETE":
+        if request.method in ("DELETE", "PATCH"):
             origin = request.headers.get("Origin")
             if (origin and origin != f"{request.scheme}://{request.host}") or not hmac.compare_digest(request.headers.get("X-CSRF-Token", ""), csrf):
                 raise web.HTTPForbidden(text="Refresh the dashboard and try again")
@@ -105,7 +105,17 @@ def create_app(config, username, hashed_password, bot=None):
         result["cancelled"] = counts.get('cancelled', 0) + counts.get('replaced', 0)
         finished = result["completed"] + result["failed"]
         result["success_rate"] = round(100 * result["completed"] / finished, 1) if finished else None
-        return web.json_response({"stats": result, "disk": disk(), "csrf": csrf, "traffic": query("SELECT * FROM traffic ORDER BY route"), "cloudflare_enabled": bool(config.worker_url)})
+        return web.json_response({"stats": result, "disk": disk(), "csrf": csrf, "traffic": query("SELECT * FROM traffic ORDER BY route"), "cloudflare_enabled": bool(config.worker_url), "route_priority": stats_db.route_priority()})
+
+    async def routing(request):
+        try:
+            priority = (await request.json())["priority"]
+            if priority == 'cloudflare' and not config.worker_url:
+                raise ValueError('Cloudflare is not configured')
+            stats_db.set_route_priority(priority)
+        except (ValueError, KeyError, TypeError):
+            raise web.HTTPBadRequest(text="Select proxy or configured Cloudflare")
+        return web.json_response({"route_priority": priority})
 
     async def users(request):
         term = "%" + request.query.get("search", "")[:100] + "%"
@@ -190,6 +200,7 @@ def create_app(config, username, hashed_password, bot=None):
     app.router.add_get("/", asset)
     app.router.add_get("/assets/{name}", asset)
     app.router.add_get("/api/overview", overview)
+    app.router.add_patch("/api/routing", routing)
     app.router.add_get("/api/users", users)
     app.router.add_get(r"/api/users/{user_id:\d+}", detail)
     app.router.add_get(r"/media/{job_id:\d+}/{kind}", media)

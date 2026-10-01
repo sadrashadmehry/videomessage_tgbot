@@ -8,6 +8,48 @@ from aiogram.exceptions import TelegramNetworkError, TelegramRetryAfter
 from aiogram.methods import GetMe, SendMessage
 
 from bot.transport import RoutedSession, WorkerQuotaExceeded, check_worker_quota
+from bot.services.storage_service import StatsStorage
+
+
+def test_persistent_priority_switch_and_proxy_failover(tmp_path):
+    async def run():
+        storage = StatsStorage(str(tmp_path / 'bot.sqlite3'))
+        session = RoutedSession('https://relay.example', 'secret', 'socks5://localhost:1080', storage)
+        bot = Bot('123456:TEST', session=session)
+        session.worker.make_request = AsyncMock(return_value='worker')
+        session.fallback.make_request = AsyncMock(return_value='proxy')
+        assert await session.make_request(bot, GetMe()) == 'proxy'
+        session.worker.make_request.assert_not_called()
+        session.fallback.make_request.side_effect = TelegramNetworkError(method=GetMe(), message='unavailable')
+        assert await session.make_request(bot, GetMe()) == 'worker'
+        session.proxy_blocked_until = 0
+        with pytest.raises(TelegramNetworkError):
+            await session.make_request(bot, SendMessage(chat_id=1,text='test'))
+        assert session.worker.make_request.await_count == 1  # uncertain writes are not replayed
+        storage.set_route_priority('cloudflare')
+        assert StatsStorage(str(storage.path)).route_priority() == 'cloudflare'
+        assert await session.make_request(bot, GetMe()) == 'worker'
+        storage.set_route_priority('proxy')
+        session.proxy_blocked_until = 0
+        async def failed(*args):
+            raise ClientConnectionError('unavailable')
+            yield b''
+        async def partial(*args):
+            yield b'partial'
+            raise ClientConnectionError('lost')
+        async def complete(*args):
+            yield b'complete'
+        session.fallback.stream_content = failed
+        session.worker.stream_content = complete
+        url='https://api.telegram.org/file/bot123456:TEST/videos/file_1.mp4'
+        assert b''.join([c async for c in session.stream_content(url)]) == b'complete'
+        session.fallback.stream_content = partial
+        session.proxy_blocked_until = 0
+        with pytest.raises(ClientConnectionError):
+            async for _ in session.stream_content(url):
+                pass
+        await session.close()
+    asyncio.run(run())
 
 
 def test_routing_and_download_failover():

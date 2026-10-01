@@ -116,6 +116,7 @@ class StatsStorage:
                     requests INTEGER NOT NULL DEFAULT 0,
                     started_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
                 """
             )
             if "animation_version" not in {row[1] for row in conn.execute("PRAGMA table_info(jobs)")}:
@@ -188,6 +189,17 @@ class StatsStorage:
             return
         with self._connect() as conn:
             conn.execute("INSERT INTO traffic(route,uploaded,downloaded,requests,started_at) VALUES(?,?,?,?,?) ON CONFLICT(route) DO UPDATE SET uploaded=uploaded+excluded.uploaded,downloaded=downloaded+excluded.downloaded,requests=requests+excluded.requests", (route, uploaded, downloaded, requests, _utc_now()))
+
+    def route_priority(self):
+        with self._connect() as conn:
+            row = conn.execute("SELECT value FROM settings WHERE key='route_priority'").fetchone()
+        return row[0] if row else 'proxy'
+
+    def set_route_priority(self, priority):
+        if priority not in ('proxy', 'cloudflare'):
+            raise ValueError('Invalid routing priority')
+        with self._connect() as conn:
+            conn.execute("INSERT INTO settings(key,value) VALUES('route_priority',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (priority,))
 
     def create_job(
         self,
