@@ -11,6 +11,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.exceptions import TelegramNetworkError, TelegramServerError
+from aiogram.types import BotCommand, MenuButtonCommands
 
 from bot.config import load_config
 from bot.handlers import common, crop_selector, errors, start, video_intake
@@ -59,6 +60,12 @@ async def main() -> None:
         while True:
             try:
                 await bot.delete_webhook(drop_pending_updates=False, request_timeout=20)
+                await bot.set_my_commands([
+                    BotCommand(command="start", description="Start / شروع"),
+                    BotCommand(command="cancel", description="Cancel / لغو"),
+                    BotCommand(command="help", description="Help / راهنما"),
+                ], request_timeout=20)
+                await bot.set_chat_menu_button(menu_button=MenuButtonCommands(), request_timeout=20)
                 break
             except (TelegramNetworkError, TelegramServerError):
                 logging.warning('Telegram unavailable at startup; retrying in 10 seconds')

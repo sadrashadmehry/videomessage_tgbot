@@ -7,12 +7,15 @@ from bot.services.storage_service import StatsStorage
 router = Router(name="start")
 
 WELCOME = (
-    "سلام و ادب و احترام و تشکر و عرض؛\n"
-    "ویدیو/گیفتونو اپلود کنید و قبل از کانفیرم اگر جای خاصی از ویدیو مدنظرتونه که کراپ شه انتخابش کنید. "
-    "اگر میخواستید اول و اخر ویدیو حذف بشه زمان شروع و پایان ویدیو رو بفرستین."
+
+	"سلام و ادب و احترام و تشکر و عرض؛\n"
+
+	"ویدیو/گیفتونو اپلود کنید و قبل از کانفیرم، اگر جای خاصی از ویدیو مدنظرتونه که کراپ شه، تو دایره زرد فیت کنید. اگر میخواستید اول و اخر ویدیو حذف شه، زمان شروع و پایان مدنظرتونو در 2 فرمت فقط ثانیه یا دقیقه:ثانیه بفرستین.\n"
+	"بخش جالب ماجرا. دکمه send as gif رو بزنید و بعد خروجی رو فوروارد کنین هر جا و بعد به گیفاتون مراجعه کنید."
 )
 START_KEYBOARD = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text="/start")]], resize_keyboard=True, is_persistent=True,
+    keyboard=[[KeyboardButton(text="/start"), KeyboardButton(text="/cancel")]],
+    resize_keyboard=True, is_persistent=False, one_time_keyboard=True,
 )
 
 

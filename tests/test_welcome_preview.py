@@ -4,10 +4,11 @@ from bot.handlers.start import START_KEYBOARD, WELCOME
 from bot.services.preview_service import render_crop_preview
 
 
-def test_persistent_start_button_and_colored_crop_outline(tmp_path):
+def test_hideable_command_buttons_and_colored_crop_outline(tmp_path):
     assert WELCOME.startswith("سلام و ادب و احترام و تشکر و عرض؛")
-    assert START_KEYBOARD.is_persistent
-    assert START_KEYBOARD.keyboard[0][0].text == "/start"
+    assert START_KEYBOARD.is_persistent is False
+    assert START_KEYBOARD.one_time_keyboard is True
+    assert [button.text for button in START_KEYBOARD.keyboard[0]] == ["/start", "/cancel"]
 
     frame = tmp_path / "frame.png"
     preview = tmp_path / "preview.jpg"
