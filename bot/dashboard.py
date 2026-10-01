@@ -15,6 +15,7 @@ import time
 
 from aiohttp import web
 from aiogram import Bot
+from aiogram.methods import GetMe
 
 from bot.config import load_config
 from bot.transport import RoutedSession
@@ -112,6 +113,11 @@ def create_app(config, username, hashed_password, bot=None):
             priority = (await request.json())["priority"]
             if priority == 'cloudflare' and not config.worker_url:
                 raise ValueError('Cloudflare is not configured')
+            if priority == 'cloudflare':
+                try:
+                    await bot.session.worker.make_request(bot, GetMe(), timeout=5)
+                except Exception:
+                    raise web.HTTPBadGateway(text="Cloudflare is unreachable from this server. Proxy remains selected.") from None
             stats_db.set_route_priority(priority)
         except (ValueError, KeyError, TypeError):
             raise web.HTTPBadRequest(text="Select proxy or configured Cloudflare")

@@ -1,4 +1,5 @@
 import asyncio
+from unittest.mock import AsyncMock
 from types import SimpleNamespace
 
 from aiohttp import BasicAuth
@@ -65,4 +66,15 @@ def test_dashboard_auth_history_download_and_safe_cleanup(tmp_path):
             assert not list((tmp_path / "dashboard-cache").iterdir())
             assert storage.get_job(1)["source_file_id"] == "secret-file-id"
             assert (exports / "keep.txt").is_file() and (working / "active.mp4").is_file()
+        fake = FakeBot()
+        fake.worker = SimpleNamespace(make_request=AsyncMock(side_effect=asyncio.TimeoutError))
+        app = create_app(Config(bot_token="fake", database_path=str(storage.path), worker_url="https://relay.example"), "admin", password_hash("test-password"), fake)
+        async with TestClient(TestServer(app)) as client:
+            result = await (await client.get("/api/overview", auth=auth)).json()
+            headers = {"X-CSRF-Token": result["csrf"]}
+            assert (await client.patch("/api/routing", auth=auth, headers=headers, json={"priority": "cloudflare"})).status == 502
+            assert storage.route_priority() == "proxy"
+            fake.worker.make_request.side_effect = None
+            assert (await client.patch("/api/routing", auth=auth, headers=headers, json={"priority": "cloudflare"})).status == 200
+            assert storage.route_priority() == "cloudflare"
     asyncio.run(check())
