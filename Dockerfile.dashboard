@@ -1,0 +1,2 @@
+FROM telegram-bot-v2-bot:round-gif
+COPY bot /app/bot

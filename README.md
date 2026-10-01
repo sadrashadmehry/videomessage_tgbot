@@ -219,3 +219,24 @@ MIT — see [`LICENSE`](LICENSE).
 ### Native round GIFs
 
 Set `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` in `.env` to enable MTProto uploads with both round-video and animated attributes. The GIF button removes audio without masking or re-encoding the video. Cached results are copied as Telegram messages to preserve their attributes. Without both credentials, the existing rectangular-animation path remains available. Phone client playback and saving should be verified on the installed Telegram versions.
+
+### Private dashboard
+
+The dashboard runs separately from the bot at `https://SERVER_IP:8443`. It shows users, requests, completed/failed/pending counts, success rate, starts, GIF requests, user prompts, and original/output media. Success rate excludes unfinished requests. History begins when activity recording was enabled.
+
+Media is fetched from Telegram on demand into `data/dashboard-cache`. Download buttons save it through your browser. Per-file deletion and **Clear all downloaded media** remove cached downloads and recognized `data/exports/job-*.bin` files. They preserve the database, Telegram references, and active bot temporary files. Opening media again downloads it again. Telegram Bot API download size limits still apply.
+
+Create an ignored `secrets/dashboard.env` containing `DASHBOARD_USERNAME`, `DASHBOARD_PASSWORD_HASH`, `DASHBOARD_TLS_CERT=/app/secrets/dashboard-cert.pem`, and `DASHBOARD_TLS_KEY=/app/secrets/dashboard-key.pem`. Single-quote the hash value (`DASHBOARD_PASSWORD_HASH='pbkdf2_sha256$...'`) to prevent Compose from interpreting dollar signs. Generate the password hash without recording the password in shell history:
+
+```sh
+python -c 'from getpass import getpass; from bot.dashboard import password_hash; print(password_hash(getpass()))'
+```
+
+Place the certificate/key in `secrets/dashboard-cert.pem` and `secrets/dashboard-key.pem`, restrict secret files to mode 600, and build/start only the dashboard:
+
+```sh
+docker build -f Dockerfile.dashboard -t telegram-bot-v2-bot:dashboard .
+docker compose -f docker-compose.yml -f compose.proxy.yml -f compose.dashboard.yml up -d --no-deps --no-build dashboard
+```
+
+`Dockerfile.dashboard` layers the existing production `telegram-bot-v2-bot:round-gif` image. For a fresh installation, build that bot image first or replace its `FROM` with your existing bot image. A self-signed IP certificate requires accepting a browser certificate warning. Credentials use PBKDF2 hashing and HTTP Basic authentication over HTTPS; never expose this service over plain HTTP. Port 8443 must be reachable. Changing credentials requires recreating only the dashboard service.

@@ -1,0 +1,21 @@
+services:
+  dashboard:
+    image: telegram-bot-v2-bot:dashboard
+    command: ["python", "-m", "bot.dashboard"]
+    env_file:
+      - .env
+      - ./secrets/dashboard.env
+    environment:
+      FALLBACK_PROXY_URL: socks5://xray:1080
+    volumes:
+      - ./data:/app/data
+      - ./secrets/dashboard-cert.pem:/app/secrets/dashboard-cert.pem:ro
+      - ./secrets/dashboard-key.pem:/app/secrets/dashboard-key.pem:ro
+    ports:
+      - "8443:8443"
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "2"

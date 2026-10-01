@@ -1,8 +1,11 @@
 .git
 .env
 secrets
-.venv
-__pycache__
 data
-*.log
-*.tar*
+backups
+*.tar.gz
+__pycache__
+**/__pycache__
+.pytest_cache
+.venv
+venv
