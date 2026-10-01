@@ -20,6 +20,8 @@ from bot.services.ffmpeg_service import (
 )
 from bot.services.preview_service import render_crop_preview
 from bot.services.storage_service import StatsStorage
+from bot.services.round_animation import send_round_animation
+from aiogram.exceptions import TelegramBadRequest
 from bot.services.time_range import TimeParseError, format_timestamp, parse_time_range
 from bot.states import CropStates
 from bot.utils.session import clear_session
@@ -289,10 +291,22 @@ async def handle_send_gif_version(
 
     stats_db.upsert_user(call.from_user)
     stats_db.mark_gif_requested(call.from_user.id)
+    native_round_gif = bool(config.telegram_api_id and config.telegram_api_hash)
+
+    if native_round_gif and job.get("animation_version") == 2 and job.get("animation_message_id"):
+        try:
+            await call.bot.copy_message(
+                chat_id=call.message.chat.id, from_chat_id=job["animation_chat_id"],
+                message_id=job["animation_message_id"],
+            )
+            await call.answer("Sent GIF version.")
+            return
+        except TelegramBadRequest:
+            logger.info("Cached round GIF message unavailable; regenerating job %s", job_id)
 
     # Once generated once, resend the Telegram-hosted animation by file_id.
     # This requires zero media storage or ffmpeg work on our server.
-    if job.get("animation_file_id") and job.get("animation_version") == 1:
+    if not native_round_gif and job.get("animation_file_id") and job.get("animation_version") == 1:
         await call.answer("Sending GIF version…")
         try:
             await call.message.answer_animation(animation=job["animation_file_id"])
@@ -321,22 +335,30 @@ async def handle_send_gif_version(
             str(note_path),
             str(animation_path),
             ffmpeg_binary=config.ffmpeg_binary,
+            circular_mask=not native_round_gif,
         )
         rendered_duration = await get_output_duration(
             str(animation_path), ffprobe_binary=config.ffprobe_binary
         )
-        sent = await call.message.answer_animation(
-            animation=FSInputFile(animation_path),
-            duration=round(rendered_duration),
-            width=config.video_note_size,
-            height=config.video_note_size,
-        )
-        animation = sent.animation
-        stats_db.save_animation(
-            job_id,
-            animation_file_id=animation.file_id if animation else None,
-            animation_file_unique_id=animation.file_unique_id if animation else None,
-        )
+        if native_round_gif:
+            message_id, file_id = await send_round_animation(
+                config, call.message.chat.id, str(animation_path),
+                rendered_duration, config.video_note_size,
+            )
+            stats_db.save_animation(
+                job_id, animation_file_id=file_id, animation_file_unique_id=None,
+                animation_message_id=message_id, animation_chat_id=call.message.chat.id,
+            )
+        else:
+            sent = await call.message.answer_animation(
+                animation=FSInputFile(animation_path), duration=round(rendered_duration),
+                width=config.video_note_size, height=config.video_note_size,
+            )
+            animation = sent.animation
+            stats_db.save_animation(
+                job_id, animation_file_id=animation.file_id if animation else None,
+                animation_file_unique_id=animation.file_unique_id if animation else None,
+            )
     except FFmpegError as e:
         logger.warning("GIF-version remux failed for job %s: %s", job_id, e)
         await call.message.answer("⚠️ I couldn't prepare the GIF version. Please try again.")

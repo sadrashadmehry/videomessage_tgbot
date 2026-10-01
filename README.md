@@ -215,3 +215,7 @@ Full architecture, data flow, and design-decision rationale:
 ## License
 
 MIT — see [`LICENSE`](LICENSE).
+
+### Native round GIFs
+
+Set `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` in `.env` to enable MTProto uploads with both round-video and animated attributes. The GIF button removes audio without masking or re-encoding the video. Cached results are copied as Telegram messages to preserve their attributes. Without both credentials, the existing rectangular-animation path remains available. Phone client playback and saving should be verified on the installed Telegram versions.

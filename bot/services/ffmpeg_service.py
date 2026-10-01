@@ -183,12 +183,12 @@ async def render_animation_from_video_note(
     output_path: str,
     *,
     ffmpeg_binary: str = "ffmpeg",
+    circular_mask: bool = True,
 ) -> None:
     """Turn our rendered video-note MP4 into a Telegram animation.
 
-    Keep the video-note crop, but mask its corners against a dark matte.
-    Telegram animations remain rectangular media; this makes the content
-    circular while retaining the Add to GIFs action.
+    Native round GIF uploads only strip audio and preserve video bytes.
+    The legacy Bot API animation path uses a dark circular matte.
     """
     inside = "clip((0.25-(X/W-0.5)*(X/W-0.5)-(Y/H-0.5)*(Y/H-0.5))*W,0,1)"
     vf = (
@@ -204,14 +204,12 @@ async def render_animation_from_video_note(
         "-i", input_path,
         "-map", "0:v:0",
         "-an",
-        "-vf", vf,
-        "-c:v", "libx264",
-        "-preset", "veryfast",
-        "-crf", "23",
-        "-pix_fmt", "yuv420p",
-        "-movflags", "+faststart",
-        output_path,
     ]
+    if circular_mask:
+        cmd += ["-vf", vf, "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p"]
+    else:
+        cmd += ["-c:v", "copy"]
+    cmd += ["-movflags", "+faststart", output_path]
     code, _, err = await _run(cmd)
     if code != 0:
         raise FFmpegError(

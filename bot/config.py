@@ -25,6 +25,8 @@ class Config:
     worker_url: str = ''
     worker_secret: str = ''
     fallback_proxy_url: str = ''
+    telegram_api_id: int = 0
+    telegram_api_hash: str = ''
 
     # Output video note is always square: video_note_size x video_note_size.
     # Telegram's official clients typically produce 384x384; 640 is a safe
@@ -79,6 +81,8 @@ def load_config() -> Config:
         worker_url=os.getenv('WORKER_URL', ''),
         worker_secret=os.getenv('WORKER_SECRET', ''),
         fallback_proxy_url=os.getenv('FALLBACK_PROXY_URL', ''),
+        telegram_api_id=_int_env('TELEGRAM_API_ID', 0),
+        telegram_api_hash=os.getenv('TELEGRAM_API_HASH', ''),
         video_note_size=_int_env("VIDEO_NOTE_SIZE", 384),
         max_video_note_duration=_int_env("MAX_VIDEO_NOTE_DURATION", 60),
         max_download_size_mb=_int_env("MAX_DOWNLOAD_SIZE_MB", 20),
