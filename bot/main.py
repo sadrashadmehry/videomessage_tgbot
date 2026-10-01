@@ -42,7 +42,7 @@ async def main() -> None:
 
     bot = Bot(
         token=config.bot_token,
-        session=RoutedSession(config.worker_url, config.worker_secret, config.fallback_proxy_url),
+        session=RoutedSession(config.worker_url, config.worker_secret, config.fallback_proxy_url, stats_db),
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
     dp = Dispatcher(storage=MemoryStorage())
@@ -63,6 +63,7 @@ async def main() -> None:
                 await bot.set_my_commands([
                     BotCommand(command="start", description="Start / شروع"),
                     BotCommand(command="cancel", description="Cancel / لغو"),
+                    BotCommand(command="quota", description="Remaining requests / درخواست‌های باقی‌مانده"),
                     BotCommand(command="help", description="Help / راهنما"),
                 ], request_timeout=20)
                 await bot.set_chat_menu_button(menu_button=MenuButtonCommands(), request_timeout=20)

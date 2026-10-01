@@ -11,6 +11,7 @@ from aiogram import Bot
 
 from bot.config import load_config
 from bot.transport import RoutedSession
+from bot.services.storage_service import StatsStorage
 
 
 async def main() -> None:
@@ -45,7 +46,7 @@ async def main() -> None:
         return
     output = Path("data/exports") / f"job-{args.job_id}-{args.media}.bin"
     output.parent.mkdir(parents=True, exist_ok=True)
-    async with Bot(config.bot_token, session=RoutedSession(config.worker_url, config.worker_secret, config.fallback_proxy_url)) as bot:
+    async with Bot(config.bot_token, session=RoutedSession(config.worker_url, config.worker_secret, config.fallback_proxy_url, StatsStorage(config.database_path))) as bot:
         await bot.download(file_id, destination=output)
     print(output.resolve())
 

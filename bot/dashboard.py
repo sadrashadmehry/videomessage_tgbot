@@ -18,6 +18,7 @@ from aiogram import Bot
 
 from bot.config import load_config
 from bot.transport import RoutedSession
+from bot.services.storage_service import StatsStorage
 
 MEDIA = {"source": "source_file_id", "video_note": "video_note_file_id", "animation": "animation_file_id"}
 ASSETS = Path(__file__).with_name("dashboard_static")
@@ -34,13 +35,14 @@ def create_app(config, username, hashed_password, bot=None):
     if algorithm != "pbkdf2_sha256" or int(iterations) < 100000 or not username:
         raise ValueError("Invalid dashboard credentials")
     db = Path(config.database_path).resolve()
+    stats_db = StatsStorage(str(db))
     cache = db.parent / "dashboard-cache"
     cache.mkdir(mode=0o700, parents=True, exist_ok=True)
     exports = db.parent / "exports"
     csrf = secrets.token_urlsafe(32)
     failures = {}
     lock = asyncio.Lock()  # ponytail: one admin; per-file locks if concurrent downloads matter.
-    bot = bot or Bot(config.bot_token, session=RoutedSession(config.worker_url, config.worker_secret, config.fallback_proxy_url))
+    bot = bot or Bot(config.bot_token, session=RoutedSession(config.worker_url, config.worker_secret, config.fallback_proxy_url, stats_db))
 
     def query(sql, params=()):
         with sqlite3.connect(db.as_uri() + "?mode=ro", uri=True, timeout=10) as conn:
@@ -99,10 +101,11 @@ def create_app(config, username, hashed_password, bot=None):
         result = query("SELECT count(*) AS users, coalesce(sum(start_count),0) AS starts, coalesce(sum(gif_requests),0) AS gifs FROM users")[0]
         counts = {r["status"]: r["n"] for r in query("SELECT status,count(*) AS n FROM jobs GROUP BY status")}
         result.update(requests=sum(counts.values()), completed=counts.get("completed", 0), failed=counts.get("failed", 0))
-        result["pending"] = result["requests"] - result["completed"] - result["failed"]
+        result["pending"] = sum(counts.get(status, 0) for status in ('received', 'ready', 'processing'))
+        result["cancelled"] = counts.get('cancelled', 0) + counts.get('replaced', 0)
         finished = result["completed"] + result["failed"]
         result["success_rate"] = round(100 * result["completed"] / finished, 1) if finished else None
-        return web.json_response({"stats": result, "disk": disk(), "csrf": csrf})
+        return web.json_response({"stats": result, "disk": disk(), "csrf": csrf, "traffic": query("SELECT * FROM traffic ORDER BY route"), "cloudflare_enabled": bool(config.worker_url)})
 
     async def users(request):
         term = "%" + request.query.get("search", "")[:100] + "%"
@@ -124,7 +127,7 @@ def create_app(config, username, hashed_password, bot=None):
                 if "file_" in key:
                     del row[key]
         prompts = query("SELECT kind,text,created_at FROM prompts WHERE user_id=? ORDER BY id DESC LIMIT 25 OFFSET ?", (user_id, page(request) * 25))
-        return web.json_response({"user": user[0], "jobs": rows, "prompts": prompts, "jobs_total": query("SELECT count(*) AS n FROM jobs WHERE user_id=?", (user_id,))[0]["n"], "prompts_total": query("SELECT count(*) AS n FROM prompts WHERE user_id=?", (user_id,))[0]["n"]})
+        return web.json_response({"user": user[0], "quota": stats_db.daily_quota(user_id, config.daily_request_limit), "jobs": rows, "prompts": prompts, "jobs_total": query("SELECT count(*) AS n FROM jobs WHERE user_id=?", (user_id,))[0]["n"], "prompts_total": query("SELECT count(*) AS n FROM prompts WHERE user_id=?", (user_id,))[0]["n"]})
 
     async def media(request):
         job_id = int(request.match_info["job_id"])

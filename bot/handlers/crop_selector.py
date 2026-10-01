@@ -344,6 +344,7 @@ async def handle_send_gif_version(
             message_id, file_id = await send_round_animation(
                 config, call.message.chat.id, str(animation_path),
                 rendered_duration, config.video_note_size,
+                stats_db=stats_db,
             )
             stats_db.save_animation(
                 job_id, animation_file_id=file_id, animation_file_unique_id=None,

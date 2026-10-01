@@ -7,7 +7,7 @@ import re
 import time
 from urllib.parse import urlsplit
 
-from aiohttp import ClientError
+from aiohttp import ClientError, TraceConfig
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.client.session.base import BaseSession
 from aiogram.client.telegram import TelegramAPIServer
@@ -26,9 +26,36 @@ def check_worker_quota(status: int, body: str) -> None:
         raise WorkerQuotaExceeded
 
 
-class WorkerSession(AiohttpSession):
-    def __init__(self, url: str, secret: str):
-        super().__init__(api=TelegramAPIServer(
+class MeteredSession(AiohttpSession):
+    def __init__(self, route, stats_db=None, **kwargs):
+        super().__init__(**kwargs)
+        self.route, self.stats_db = route, stats_db
+        self.trace = TraceConfig()
+        self.trace.on_request_chunk_sent.append(self.sent)
+        self.trace.on_response_chunk_received.append(self.received)
+        self.trace.on_request_end.append(self.finished)
+        self.trace.on_request_exception.append(self.finished)
+        self.trace.freeze()
+
+    async def create_session(self):
+        session = await super().create_session()
+        if self.stats_db and self.trace not in session.trace_configs:
+            session.trace_configs.append(self.trace)
+        return session
+
+    async def sent(self, session, context, params):
+        context.uploaded = getattr(context, 'uploaded', 0) + len(params.chunk)
+
+    async def received(self, session, context, params):
+        self.stats_db.record_traffic(self.route, downloaded=len(params.chunk))
+
+    async def finished(self, session, context, params):
+        self.stats_db.record_traffic(self.route, uploaded=getattr(context, 'uploaded', 0), requests=1)
+
+
+class WorkerSession(MeteredSession):
+    def __init__(self, url: str, secret: str, stats_db=None):
+        super().__init__('cloudflare', stats_db, api=TelegramAPIServer(
             base=url + '/api/{method}', file=url + '/file/{path}',
         ))
         self.secret = secret
@@ -54,7 +81,7 @@ class WorkerSession(AiohttpSession):
 
 
 class RoutedSession(BaseSession):
-    def __init__(self, worker_url: str = '', worker_secret: str = '', proxy_url: str = ''):
+    def __init__(self, worker_url: str = '', worker_secret: str = '', proxy_url: str = '', stats_db=None):
         super().__init__()
         worker_url = worker_url.rstrip('/')
         if worker_url:
@@ -67,8 +94,10 @@ class RoutedSession(BaseSession):
                 raise ValueError('FALLBACK_PROXY_URL is required with WORKER_URL')
         if proxy_url and urlsplit(proxy_url).scheme not in ('socks5', 'socks4', 'http'):
             raise ValueError('FALLBACK_PROXY_URL must be a SOCKS or HTTP proxy URL')
-        self.worker = WorkerSession(worker_url, worker_secret) if worker_url else None
-        self.fallback = AiohttpSession(proxy=proxy_url or None)
+        self.worker = WorkerSession(worker_url, worker_secret, stats_db) if worker_url else None
+        self.fallback_route = 'proxy' if proxy_url else 'direct'
+        self.fallback = MeteredSession(self.fallback_route, stats_db, proxy=proxy_url or None)
+        self.stats_db = stats_db
         self.worker_url = worker_url
         self.blocked_until = 0.0
 
@@ -102,11 +131,13 @@ class RoutedSession(BaseSession):
         file_path = url[len(telegram_prefix):].split('/', 1)[1]
         if self.worker_available():
             received = False
+            downloaded = 0
             try:
                 async for chunk in self.worker.stream_content(
                     self.worker_url + '/file/' + file_path, headers, timeout, chunk_size, raise_for_status,
                 ):
                     received = True
+                    downloaded += len(chunk)
                     yield chunk
                 return
             except WorkerQuotaExceeded:
@@ -116,8 +147,17 @@ class RoutedSession(BaseSession):
                 if received:
                     # Restarting after yielding bytes would corrupt the destination file.
                     raise
-        async for chunk in self.fallback.stream_content(url, headers, timeout, chunk_size, raise_for_status):
-            yield chunk
+            finally:
+                if self.stats_db:
+                    self.stats_db.record_traffic('cloudflare', downloaded=downloaded)
+        downloaded = 0
+        try:
+            async for chunk in self.fallback.stream_content(url, headers, timeout, chunk_size, raise_for_status):
+                downloaded += len(chunk)
+                yield chunk
+        finally:
+            if self.stats_db:
+                self.stats_db.record_traffic(self.fallback_route, downloaded=downloaded)
 
     async def close(self):
         await self.fallback.close()

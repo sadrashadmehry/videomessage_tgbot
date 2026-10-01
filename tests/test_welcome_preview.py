@@ -9,6 +9,8 @@ def test_hideable_command_buttons_and_colored_crop_outline(tmp_path):
     assert START_KEYBOARD.is_persistent is False
     assert START_KEYBOARD.one_time_keyboard is True
     assert [button.text for button in START_KEYBOARD.keyboard[0]] == ["/start", "/cancel"]
+    assert START_KEYBOARD.keyboard[1][0].text == "📊 Remaining requests"
+    assert WELCOME.endswith("دکمه send as gif رو بزنید و بعد خروجی رو با hide sender name فوروارد کنین هر جا و بعد به گیفاتون مراجعه کنید.")
 
     frame = tmp_path / "frame.png"
     preview = tmp_path / "preview.jpg"

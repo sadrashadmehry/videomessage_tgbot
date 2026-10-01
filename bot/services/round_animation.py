@@ -20,6 +20,7 @@ def round_animation_attributes(duration: float, size: int) -> list:
 
 async def send_round_animation(
     config: Config, chat_id: int, path: str, duration: float, size: int,
+    stats_db=None,
 ) -> tuple[int, str]:
     proxy = None
     if config.fallback_proxy_url:
@@ -40,10 +41,19 @@ async def send_round_animation(
     try:
         await client.start(bot_token=config.bot_token)
         peer = await client.get_input_entity(chat_id)
+        uploaded = 0
+        async def progress(current, total):
+            nonlocal uploaded
+            if stats_db:
+                stats_db.record_traffic('proxy' if proxy else 'direct', uploaded=max(0, current-uploaded))
+            uploaded = current
+        file = await client.upload_file(path, progress_callback=progress)
+        if stats_db:
+            stats_db.record_traffic('proxy' if proxy else 'direct', requests=1)
         result = await client(functions.messages.SendMediaRequest(
             peer=peer,
             media=types.InputMediaUploadedDocument(
-                file=await client.upload_file(path), mime_type='video/mp4',
+                file=file, mime_type='video/mp4',
                 attributes=round_animation_attributes(duration, size),
             ),
             message='', random_id=helpers.generate_random_long(),

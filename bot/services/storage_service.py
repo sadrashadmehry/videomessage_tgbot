@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -12,6 +12,13 @@ if TYPE_CHECKING:
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def daily_window(now=None):
+    local = (now or datetime.now(timezone.utc)).astimezone(timezone(timedelta(hours=3, minutes=30)))
+    start = local.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = start + timedelta(days=1)
+    return start.astimezone(timezone.utc).isoformat(timespec="seconds"), end.astimezone(timezone.utc).isoformat(timespec="seconds"), end.strftime("%Y-%m-%d %H:%M")
 
 
 class StatsStorage:
@@ -102,6 +109,13 @@ class StatsStorage:
                 CREATE INDEX IF NOT EXISTS idx_jobs_source_unique ON jobs(source_file_unique_id);
                 CREATE INDEX IF NOT EXISTS idx_prompts_user_id ON prompts(user_id);
                 CREATE INDEX IF NOT EXISTS idx_prompts_created_at ON prompts(created_at);
+                CREATE TABLE IF NOT EXISTS traffic (
+                    route TEXT PRIMARY KEY,
+                    uploaded INTEGER NOT NULL DEFAULT 0,
+                    downloaded INTEGER NOT NULL DEFAULT 0,
+                    requests INTEGER NOT NULL DEFAULT 0,
+                    started_at TEXT NOT NULL
+                );
                 """
             )
             if "animation_version" not in {row[1] for row in conn.execute("PRAGMA table_info(jobs)")}:
@@ -163,6 +177,18 @@ class StatsStorage:
                 (user_id, chat_id, message_id, kind, text, _utc_now()),
             )
 
+    def daily_quota(self, user_id, limit=10, now=None):
+        start, end, reset = daily_window(now)
+        with self._connect() as conn:
+            used = conn.execute("SELECT count(*) FROM jobs WHERE user_id=? AND created_at>=? AND created_at<? AND status!='rejected_too_large'", (user_id, start, end)).fetchone()[0]
+        return {"limit": limit, "used": used, "remaining": max(0, limit-used), "reset_at": reset, "timezone": "Tehran"}
+
+    def record_traffic(self, route, uploaded=0, downloaded=0, requests=0):
+        if not (uploaded or downloaded or requests):
+            return
+        with self._connect() as conn:
+            conn.execute("INSERT INTO traffic(route,uploaded,downloaded,requests,started_at) VALUES(?,?,?,?,?) ON CONFLICT(route) DO UPDATE SET uploaded=uploaded+excluded.uploaded,downloaded=downloaded+excluded.downloaded,requests=requests+excluded.requests", (route, uploaded, downloaded, requests, _utc_now()))
+
     def create_job(
         self,
         *,
@@ -175,9 +201,16 @@ class StatsStorage:
         source_file_size: int | None,
         source_mime_type: str | None,
         prompt_text: str | None,
-    ) -> int:
+        daily_limit: int | None = None,
+    ) -> int | None:
         now = _utc_now()
         with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            if daily_limit is not None:
+                start, end, _ = daily_window(datetime.fromisoformat(now))
+                used = conn.execute("SELECT count(*) FROM jobs WHERE user_id=? AND created_at>=? AND created_at<? AND status!='rejected_too_large'", (user_id, start, end)).fetchone()[0]
+                if used >= daily_limit:
+                    return None
             cur = conn.execute(
                 """
                 INSERT INTO jobs (

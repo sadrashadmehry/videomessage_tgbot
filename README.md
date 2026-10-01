@@ -222,6 +222,10 @@ Set `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` in `.env` to enable MTProto upload
 
 ### Private dashboard
 
+Uploads are limited to 12 MB. Each user has 10 accepted video/GIF uploads per calendar day, resetting at midnight Tehran time. `/quota` and the **Remaining requests** keyboard button show the allowance and reset date/hour. Failed, cancelled, or replaced accepted uploads still count; oversized uploads and command/GIF-output buttons do not. Quotas persist in SQLite across restarts.
+
+The dashboard shows each user's quota and traffic totals by Cloudflare, configured proxy, and direct routes. Traffic starts when this update is deployed, includes HTTP body bytes and native GIF upload bytes, and survives restarts. Encryption/network overhead and MTProto control messages are excluded; totals are not provider billing measurements. Dashboard and inspection Telegram downloads are included. An unconfigured Cloudflare Worker is shown explicitly.
+
 The dashboard runs separately from the bot at `https://SERVER_IP:8443`. It shows users, requests, completed/failed/pending counts, success rate, starts, GIF requests, user prompts, and original/output media. Success rate excludes unfinished requests. History begins when activity recording was enabled.
 
 Media is fetched from Telegram on demand into `data/dashboard-cache`. Download buttons save it through your browser. Per-file deletion and **Clear all downloaded media** remove cached downloads and recognized `data/exports/job-*.bin` files. They preserve the database, Telegram references, and active bot temporary files. Opening media again downloads it again. Telegram Bot API download size limits still apply.

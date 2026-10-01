@@ -37,11 +37,9 @@ class Config:
     # Anything longer is trimmed to this many seconds from the start.
     max_video_note_duration: int = 60
 
-    # The public Bot API (api.telegram.org) refuses to let a bot *download*
-    # a file bigger than this, regardless of what sendVideoNote itself
-    # would accept. Only relevant if you're using the public API rather
-    # than a self-hosted Bot API server (see ARCHITECTURE.md).
-    max_download_size_mb: int = 20
+    # Bot upload policy; the public Telegram download ceiling is 20 MB.
+    max_download_size_mb: int = 12
+    daily_request_limit: int = 10
 
     # How far each directional button press moves the crop box, as a
     # fraction of the box's current side length.
@@ -85,7 +83,8 @@ def load_config() -> Config:
         telegram_api_hash=os.getenv('TELEGRAM_API_HASH', ''),
         video_note_size=_int_env("VIDEO_NOTE_SIZE", 384),
         max_video_note_duration=_int_env("MAX_VIDEO_NOTE_DURATION", 60),
-        max_download_size_mb=_int_env("MAX_DOWNLOAD_SIZE_MB", 20),
+        max_download_size_mb=_int_env("MAX_DOWNLOAD_SIZE_MB", 12),
+        daily_request_limit=_int_env("DAILY_REQUEST_LIMIT", 10),
         temp_dir=os.getenv("TEMP_DIR", "./data/tmp"),
         database_path=os.getenv("DATABASE_PATH", "./data/bot.sqlite3"),
         temp_session_ttl_minutes=_int_env("TEMP_SESSION_TTL_MINUTES", 120),

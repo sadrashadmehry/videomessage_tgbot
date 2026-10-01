@@ -112,14 +112,9 @@ async def _intake(
         await message.answer("⚠️ I couldn't identify the sender of this file.")
         return
 
-    # Starting a new file replaces any unfinished local session. The database
-    # keeps only metadata/file_id references; no old media bytes are retained.
-    previous = await state.get_data()
-    if previous.get("session_dir"):
-        cleanup_session_dir(previous["session_dir"])
-    if previous.get("job_id"):
-        stats_db.update_job(previous["job_id"], status="replaced")
-    await state.clear()
+    if exceeds_download_limit(file_size, config.max_download_size_mb):
+        await message.answer(f"⚠️ Maximum upload size is {config.max_download_size_mb} MB. Please send a smaller video/GIF. This upload did not use a request.")
+        return
 
     job_id = stats_db.create_job(
         user_id=message.from_user.id,
@@ -131,21 +126,21 @@ async def _intake(
         source_file_size=file_size,
         source_mime_type=mime_type,
         prompt_text=message.caption,
+        daily_limit=config.daily_request_limit,
     )
 
-    # Record the Telegram media reference even when the cloud Bot API cannot
-    # download the bytes. This keeps analytics/history complete without
-    # persisting the actual video on this server.
-    if exceeds_download_limit(file_size, config.max_download_size_mb):
-        stats_db.update_job(job_id, status="rejected_too_large")
-        await message.answer(
-            f"⚠️ That file is bigger than the {config.max_download_size_mb}MB "
-            "limit the Telegram Bot API allows bots to download. I saved its "
-            "Telegram file reference/metadata, but not the video itself. Try a "
-            "shorter/smaller clip, or run this bot against a local Bot API "
-            "server (see README.md) to remove the limit."
-        )
+    if job_id is None:
+        quota = stats_db.daily_quota(message.from_user.id, config.daily_request_limit)
+        await message.answer(f"⚠️ Daily limit reached ({quota['limit']} requests).\nRemaining: 0\nReset: {quota['reset_at']} (Tehran)")
         return
+
+    # Rejected uploads leave the current crop session intact.
+    previous = await state.get_data()
+    if previous.get("session_dir"):
+        cleanup_session_dir(previous["session_dir"])
+    if previous.get("job_id"):
+        stats_db.update_job(previous["job_id"], status="replaced")
+    await state.clear()
 
     session_dir = new_session_dir(config.temp_dir, message.from_user.id)
     input_path = session_dir / "input.mp4"
@@ -156,6 +151,11 @@ async def _intake(
 
     try:
         await message.bot.download(file_id, destination=input_path)
+        if exceeds_download_limit(input_path.stat().st_size, config.max_download_size_mb):
+            stats_db.update_job(job_id, status="rejected_too_large")
+            cleanup_session_dir(session_dir)
+            await status.edit_text(f"⚠️ Maximum upload size is {config.max_download_size_mb} MB. This upload did not use a request.")
+            return
         meta = await probe_video(str(input_path), ffprobe_binary=config.ffprobe_binary)
 
         preview_ts = min(1.0, meta.duration / 2)
